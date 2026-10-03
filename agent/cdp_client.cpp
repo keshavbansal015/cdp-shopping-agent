@@ -8,18 +8,6 @@
 #include <stdexcept>
 #include <string>
 
-/*
-CDPClient: A client for the Chrome DevTools Protocol (CDP).
-
-Usage:
-  CDPClient client(host, port, path);
-  json result = client.command(method, params, session_id);
-
-Example:
-  CDPClient client("localhost", "9222", "/devtools/browser/");
-  json version = client.command("Browser.getVersion");
-*/
-
 CDPClient::CDPClient(const std::string &host, const std::string &port,
                      const std::string &path)
     : resolver_(io_), ws_(io_), next_id_(1) {
@@ -41,7 +29,8 @@ CDPClient::~CDPClient() {
 
 // Send a CDP command and wait for the response having
 // the corresponding "id".
-CDPClient::json CDPClient::command(const std::string &method, const json &params,
+CDPClient::json CDPClient::command(const std::string &method,
+                                   const json &params,
                                    const std::string &session_id) {
 
   int id = next_id_++;

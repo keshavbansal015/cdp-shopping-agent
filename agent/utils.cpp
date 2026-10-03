@@ -36,3 +36,33 @@ WebSocketEndpoint parse_ws_url(const std::string &url) {
   }
   return {host, port, rest.substr(slash)};
 }
+
+
+std::string http_get(const std::string &host, const std::string &port,
+                     const std::string &target) {
+  asio::io_context io;
+  tcp::resolver resolver(io);
+  beast::tcp_stream stream(io);
+
+  auto endpoints = resolver.resolve(host, port);
+  stream.connect(endpoints);
+
+  http::request<http::empty_body> request{http::verb::get, target, 11};
+  request.set(http::field::host, host + ":" + port);
+  request.set(http::field::user_agent, "CDP-Cpp-Example");
+
+  http::write(stream, request);
+  beast::flat_buffer buffer;
+  http::response<http::string_body> response;
+  http::read(stream, buffer, response);
+
+  if (response.result() != http::status::ok) {
+    throw std::runtime_error("HTTP request failed: " +
+                             std::to_string(response.result_int()));
+  }
+
+  beast::error_code ec;
+  stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+
+  return response.body();
+}

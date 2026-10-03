@@ -5,6 +5,9 @@
 #include <boost/beast/websocket.hpp>
 
 #include "chromium_process.h"
+#include "cdp_client.h"
+#include "utils.h"
+#include "params.h"
 #include <nlohmann/json.hpp>
 
 #include <chrono>
@@ -33,34 +36,7 @@ using tcp = asio::ip::tcp;
 // Actual browser control happens through CDP/WebSocket.
 // ------------------------------------------------------------
 
-std::string http_get(const std::string &host, const std::string &port,
-                     const std::string &target) {
-  asio::io_context io;
-  tcp::resolver resolver(io);
-  beast::tcp_stream stream(io);
 
-  auto endpoints = resolver.resolve(host, port);
-  stream.connect(endpoints);
-
-  http::request<http::empty_body> request{http::verb::get, target, 11};
-  request.set(http::field::host, host + ":" + port);
-  request.set(http::field::user_agent, "CDP-Cpp-Example");
-
-  http::write(stream, request);
-  beast::flat_buffer buffer;
-  http::response<http::string_body> response;
-  http::read(stream, buffer, response);
-
-  if (response.result() != http::status::ok) {
-    throw std::runtime_error("HTTP request failed: " +
-                             std::to_string(response.result_int()));
-  }
-
-  beast::error_code ec;
-  stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-
-  return response.body();
-}
 
 // ------------------------------------------------------------
 // Parse ws://127.0.0.1:9222/devtools/browser/...

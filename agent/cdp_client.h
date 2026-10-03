@@ -10,6 +10,18 @@ namespace beast = boost::beast;
 namespace websocket = boost::beast::websocket;
 using tcp = asio::ip::tcp;
 
+/*
+Class: CDPClient
+
+  Usage:
+    CDPClient client(host, port, path);
+    json result = client.command(method, params, session_id);
+
+  Example:
+    CDPClient client("localhost", "9222", "/devtools/browser/");
+    json version = client.command("Browser.getVersion");
+*/
+
 class CDPClient {
 public:
   CDPClient(const std::string &host, const std::string &port,
