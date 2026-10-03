@@ -14,8 +14,8 @@
 #include <string>
 #include <sys/wait.h>
 #include <thread>
-#include <vector>
 #include <unistd.h>
+#include <vector>
 
 using json = nlohmann::json;
 
@@ -72,77 +72,7 @@ std::string http_get(const std::string &host, const std::string &port,
 // CDP client
 // ------------------------------------------------------------
 
-class CDPClient {
-public:
-  CDPClient(const std::string &host, const std::string &port,
-            const std::string &path)
-      : resolver_(io_), ws_(io_), next_id_(1) {
-    auto endpoints = resolver_.resolve(host, port);
 
-    asio::connect(ws_.next_layer(), endpoints);
-
-    ws_.set_option(
-        websocket::stream_base::timeout::suggested(beast::role_type::client));
-
-    ws_.handshake(host + ":" + port, path);
-  }
-
-  ~CDPClient() {
-    beast::error_code ec;
-
-    ws_.close(websocket::close_code::normal, ec);
-  }
-
-  // Send a CDP command and wait for the response having
-  // the corresponding "id".
-  json command(const std::string &method, const json &params = json::object(),
-               const std::string &session_id = "") {
-    int id = next_id_++;
-
-    json message = {{"id", id}, {"method", method}, {"params", params}};
-
-    if (!session_id.empty()) {
-      message["sessionId"] = session_id;
-    }
-
-    std::string text = message.dump();
-
-    ws_.write(asio::buffer(text));
-
-    while (true) {
-      beast::flat_buffer buffer;
-
-      ws_.read(buffer);
-
-      std::string received = beast::buffers_to_string(buffer.data());
-
-      json response = json::parse(received);
-
-      // CDP also sends asynchronous events. They do not have
-      // an "id", so ignore them here.
-      if (!response.contains("id")) {
-        continue;
-      }
-
-      if (response["id"].get<int>() != id) {
-        continue;
-      }
-
-      if (response.contains("error")) {
-        throw std::runtime_error("CDP error: " + response["error"].dump());
-      }
-
-      return response;
-    }
-  }
-
-private:
-  asio::io_context io_;
-  tcp::resolver resolver_;
-  websocket::stream<tcp::socket> ws_;
-
-  int next_id_;
-};
 
 // ------------------------------------------------------------
 // Main
