@@ -1,6 +1,7 @@
 "use strict";
 
 var MAX_QTY = 3;
+var RAND_SEED = 42;
 var PRODUCTS = [
     { id: "blue-mug", name: "Blue Mug", price: 12, description: "A sturdy ceramic mug that holds 350 ml." },
     { id: "red-hat", name: "Red Hat", price: 20, description: "A soft cotton cap in bright red." },
@@ -12,7 +13,26 @@ function findProduct(id) {
     return PRODUCTS.filter(p => p.id === id)[0];
 }
 
+function readGoal() {
+    // example: index.html?item=blue-mug&qty=2&seed=42&popup_p=0.15&delay_p=0.10
+    var params = new URLSearchParams(location.search);
+    var item = params.get("item", "");
+    var qty = parseInt(params.get("qty"), 10);
+    var seed = parseInt(params.get("seed"), 10);
+    var popup_p = parseFloat(params.get("popup_p"));
+    var delay_p = parseFloat(params.get("delay_p"));
+    return {
+        item: item,
+        qty: isNaN(qty) ? 1 : Math.min(MAX_QTY, Math.max(1, qty)),
+        seed: isNaN(seed) ? RAND_SEED : seed,
+        popup_p: isNaN(popup_p) ? 0.1 : Math.max(0, Math.min(1, popup_p)),
+        delay_p: isNaN(delay_p) ? 0.05 : Math.max(0, Math.min(1, delay_p))
+    };
+}
+var goal = readGoal();
 var app = document.getElementById("app");
+var overlay = null;
+var delayTimer = null;
 
 // STATE OF THE PAGE
 var state = {
@@ -56,6 +76,20 @@ function renderProduct() {
     res += "<button data-act='back'>Back</button>";
     res += "<div class='note' id='note'>" + state.message + "</div>";
     return res;
+}
+
+function viewProduct(btn) {
+    state.product = findProduct(btn.getAttribute("data-id"));
+    state.qty = 1;
+    goTo("product");
+}
+
+function incCount() {
+    if (state.qty < MAX_QTY) { state.qty++; document.getElementById("qty").textContent = state.qty; }
+}
+
+function decCount() {
+    if (state.qty > 1) { state.qty--; document.getElementById("qty").textContent = state.qty; }
 }
 
 function renderCatalog() {
@@ -117,6 +151,12 @@ function addToCart(id, qty) {
 
 function clearCart() { state.cart = []; }
 
+function updateCart() {
+    addToCart(state.product.id, state.qty);
+    state.message = "Added " + state.qty + " \u00d7 " + state.product.name + " to cart.";
+    render();   // stay on the product screen; refreshes the cart count
+}
+
 function checkout() {
     if (state.cart.length === 0) return false;
     state.order = state.cart.map(line => ({ id: line.id, qty: line.qty }));
@@ -129,7 +169,7 @@ function render() {
     document.body.setAttribute("data-screen", state.screen);
 }
 
-app.addEventListener("click", function (e) {
+app.addEventListener("click", (e) => {
     var btn = e.target.closest("button");
     if (!btn || btn.disabled) return;
     var action = ACTIONS[btn.getAttribute("data-act")];
@@ -140,34 +180,95 @@ function goTo(screen) {
     state.screen = screen;
     state.message = "";
     render();
+    afterScreenChange(screen);
+}
+
+function ensureOverlay() {
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "overlay";
+    overlay.hidden = true;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.innerHTML =
+        "<div class='box'>" +
+        "<h3>This is a popup!</h3>" +
+        "<p>Do you like popups?</p>" +
+        "<button id='dismiss'>Dismiss</button>" +
+        "</div>";
+    overlay.querySelector("#dismiss").addEventListener("click", hidePopup);
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function hidePopup() {
+    if (overlay) overlay.hidden = true;
+    app.inert = false;
+    var firstButton = app.querySelector("button");
+    if (firstButton) firstButton.focus();
+}
+
+function showPopup() {
+    ensureOverlay().hidden = false;
+    app.inert = true;   // nothing underneath can be clicked or focused
+    overlay.querySelector("#dismiss").focus();
+}
+
+
+function delayButtons(ms) {
+    app.classList.add("late");   // hides all buttons inside #app
+    delayTimer = setTimeout(() => {
+        app.classList.remove("late");
+        delayTimer = null;
+    }, ms);
+
+}
+
+function makeRng(seed) {
+    return function () {
+        let t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+}
+var rand = makeRng(goal.seed);
+
+function afterScreenChange(screen) {
+    // reset leftovers from the previous screen
+    clearTimeout(delayTimer);
+    delayTimer = null;
+    app.classList.remove("late");
+
+    if (screen !== "done") {
+        var rPopup = rand();
+        var rDelay = rand();
+        var rMs = rand();
+
+        if (rDelay < goal.delay_p) {
+            delayButtons(50 + Math.floor(rMs * 251));   // 50..300 ms
+        }
+        if (rPopup < goal.popup_p) {
+            showPopup();
+        }
+    }
 }
 
 var ACTIONS = {
-    view: function (btn) {
-        state.product = findProduct(btn.getAttribute("data-id"));
-        state.qty = 1;
-        goTo("product");
-    },
-    cart: function () { goTo("cart"); },
-    newsletter: function () { goTo("newsletter"); },
-    back: function () { goTo("catalog"); },
-    dec: function () {
-        if (state.qty > 1) { state.qty--; document.getElementById("qty").textContent = state.qty; }
-    },
-    inc: function () {
-        if (state.qty < MAX_QTY) { state.qty++; document.getElementById("qty").textContent = state.qty; }
-    },
-    add: function () {
-        addToCart(state.product.id, state.qty);
-        state.message = "Added " + state.qty + " \u00d7 " + state.product.name + " to cart.";
-        render();   // stay on the product screen; refreshes the cart count
-    },
-    clear: function () { clearCart(); render(); },
-    checkout: function () { if (checkout()) goTo("done"); }
+    view: viewProduct,
+    cart: () => { goTo("cart"); },
+    newsletter: () => { goTo("newsletter"); },
+    back: () => { goTo("catalog"); },
+    dec: decCount,
+    inc: incCount,
+    add: updateCart,
+    clear: () => { clearCart(); render(); },
+    checkout: () => { if (checkout()) goTo("done"); }
 };
 
 
 window.miniShop = {
+    goal: goal,
     get order() { return state.order ? state.order.slice() : null; },
     get success() {
         var o = state.order;
