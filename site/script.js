@@ -1,7 +1,6 @@
-
 "use strict";
 
-var MAX_QTY = 10;
+var MAX_QTY = 3;
 var PRODUCTS = [
     { id: "blue-mug", name: "Blue Mug", price: 12, description: "A sturdy ceramic mug that holds 350 ml." },
     { id: "red-hat", name: "Red Hat", price: 20, description: "A soft cotton cap in bright red." },
@@ -9,32 +8,125 @@ var PRODUCTS = [
     { id: "yellow-notebook", name: "Yellow Notebook", price: 6, description: "A 120-page notebook with lined paper." }
 ];
 
-function readGoal() {
-    // example: index.html?item=blue-mug&qty=2&seed=42&popup_p=0.15&delay_p=0.10
-    var params = new URLSearchParams(location.search);
-    var item = params.get("item", "");
-    var qty = parseInt(params.get("qty"), 10);
-    var seed = 42;
-    var popup_p = parseFloat(params.get("popup_p"));
-    var delay_p = parseFloat(params.get("delay_p"));
-    return {
-        item: item,
-        qty: isNaN(qty) ? 1 : Math.min(MAX_QTY, Math.max(1, qty)),
-        seed: seed,
-        popup_p: isNaN(popup_p) ? 0.1 : Math.max(0, Math.min(1, popup_p)),
-        delay_p: isNaN(delay_p) ? 0.05 : Math.max(0, Math.min(1, delay_p))
-    };
+function findProduct(id) {
+    return PRODUCTS.filter(p => p.id === id)[0];
 }
 
-function createTestGoal(params) {
-    // if params not provided, create a random goal
-    // params = { item, qty, seed, popup_p, delay_p }
-    var item = !params.item ? PRODUCTS[Math.floor(Math.random() * PRODUCTS.length)].id : params.item;
-    var qty = !params.qty ? Math.floor(Math.random() * MAX_QTY) + 1 : params.qty;
-    var seed = !params.seed ? Math.floor(Math.random() * 100) : params.seed;
-    var popup_p = !params.popup_p ? 0.1 : parseFloat(params.popup_p);
-    var delay_p = !params.delay_p ? 0.05 : parseFloat(params.delay_p);
-    var queryString = "?item=" + item + "&qty=" + qty + "&seed=" + seed + "&popup_p=" + popup_p + "&delay_p=" + delay_p;
-    return queryString;
+var app = document.getElementById("app");
+
+// STATE OF THE PAGE
+var state = {
+    screen: "catalog",
+    product: null,
+    qty: 0,
+    cart: [],
+    order: null,
+    message: ""
 }
 
+function money(n) {
+    // this function is used to format the number as currency
+    return "$" + n.toFixed(2) + " ";
+}
+
+function cartCount() {
+    // calculate the number of items in the cart, it can be zero
+    return state.cart.reduce((sum, line) => sum + line.qty, 0);
+}
+
+function cartTotal(lines) {
+    return lines.reduce((sum, line) => sum + findProduct(line.id).price * line.qty, 0);
+}
+
+function cartButton() {
+    return "<button data-act='cart'>Cart (" + cartCount() + ")</button>";
+}
+
+function renderProduct() {
+    var product = state.product;
+    var res = "<h2>" + product.name + "</h2>";
+    res += "<p>" + product.description + "</p>";
+    res += "<p class='muted'>" + money(product.price) + " each</p>";
+    res += "<div class='qty'>";
+    res += "<button data-act='dec'>-</button>";
+    res += "<output id='qty'>" + state.qty + "</output>";
+    res += "<button data-act='inc'>+</button></div>";
+    res += "<button class='primary' data-act='add'>Add to cart</button>";
+    res += cartButton();
+    res += "<button data-act='back'>Back</button>";
+    res += "<div class='note' id='note'>" + state.message + "</div>";
+    return res;
+}
+
+function renderCatalog() {
+    return "<h2>Catalog</h2><ul class='ul.products'>" + PRODUCTS.map(product => {
+        var res = "<li><span>" + product.name + "<span class='.price'> ";
+        res += money(product.price) + "</span></span>";
+        res += "<button data-act='view' data-id='" + product.id + "'>View</button></li>";
+        return res;
+    }).join("") + "</ul>" + cartButton() + "<button data-act='newsletter'>Newsletter</button>";
+}
+
+function renderNewsletter() {
+    return "<h2>Newsletter</h2>" +
+        "<p>Nothing to see here.</p>" +
+        "<button data-act='back'>Back</button>";
+}
+
+function linesHtml(lines) {
+    // take an array of line objects and return an HTML string, for screen: cart and done
+    return "<ul class='list'>" + lines.map(line => {
+        var product = findProduct(line.id);
+        var res = "<li>" + product.name + " \u00d7 ";
+        res += line.qty + " @ " + money(product.price);
+        res += " = " + money(product.price * line.qty) + "</li>";
+        return res;
+    }).join("") + "</ul><div class='total'>Total: " + money(cartTotal(lines)) + "</div>";
+}
+
+function renderCart() {
+    var empty = state.cart.length === 0;
+    return "<h2>Cart</h2>" +
+        (empty ? "<p>Your cart is empty.</p>" : linesHtml(state.cart)) +
+        "<button class='primary' data-act='checkout'" + (empty ? " disabled" : "") + ">Checkout</button>" +
+        "<button data-act='clear'" + (empty ? " disabled" : "") + ">Clear cart</button>" +
+        "<button data-act='back'>Back</button>";
+}
+
+function renderDone() {
+    return "<h2>Order placed</h2>" + linesHtml(state.order);
+}
+
+var RENDERERS = {
+    catalog: renderCatalog,
+    product: renderProduct,
+    cart: renderCart,
+    done: renderDone,
+    newsletter: renderNewsletter
+};
+
+function addToCart(id, qty) {
+    // adds a line or updates line
+    var line = state.cart.filter(line => line.id === id)[0];
+    if (line) {
+        line.qty += qty;
+    } else {
+        state.cart.push({ id, qty });
+    }
+}
+
+function clearCart() { state.cart = []; }
+
+function checkout() {
+    if (state.cart.length === 0) return false;
+    state.order = state.cart.map(line => ({ id: line.id, qty: line.qty }));
+    clearCart();
+    return true;
+}
+
+function render() {
+    app.innerHTML = RENDERERS[state.screen]();
+    document.body.setAttribute("data-screen", state.screen);
+}
+
+render();
