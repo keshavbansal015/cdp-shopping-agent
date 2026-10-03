@@ -8,6 +8,10 @@
 #include <csignal>
 #include <sys/wait.h>
 
+/*
+Class to handle the lifecycle of the Chromium process.
+*/
+
 class Chromium{
 public:
   Chromium() = default;

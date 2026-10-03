@@ -37,7 +37,6 @@ WebSocketEndpoint parse_ws_url(const std::string &url) {
   return {host, port, rest.substr(slash)};
 }
 
-
 std::string http_get(const std::string &host, const std::string &port,
                      const std::string &target) {
   asio::io_context io;
@@ -65,4 +64,21 @@ std::string http_get(const std::string &host, const std::string &port,
   stream.socket().shutdown(tcp::socket::shutdown_both, ec);
 
   return response.body();
+}
+
+static bool startsWith(const std::string &s, const std::string &prefix) {
+  return s.rfind(prefix, 0) == 0;
+}
+
+static bool endsWith(const std::string &s, const std::string &suffix) {
+  if (suffix.size() > s.size())
+    return false;
+
+  return s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+static long long elapsedMs(const std::chrono::steady_clock::time_point &start) {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now() - start)
+      .count();
 }
