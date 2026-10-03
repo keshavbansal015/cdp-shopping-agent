@@ -129,4 +129,53 @@ function render() {
     document.body.setAttribute("data-screen", state.screen);
 }
 
-render();
+app.addEventListener("click", function (e) {
+    var btn = e.target.closest("button");
+    if (!btn || btn.disabled) return;
+    var action = ACTIONS[btn.getAttribute("data-act")];
+    if (action) action(btn);
+});
+
+function goTo(screen) {
+    state.screen = screen;
+    state.message = "";
+    render();
+}
+
+var ACTIONS = {
+    view: function (btn) {
+        state.product = findProduct(btn.getAttribute("data-id"));
+        state.qty = 1;
+        goTo("product");
+    },
+    cart: function () { goTo("cart"); },
+    newsletter: function () { goTo("newsletter"); },
+    back: function () { goTo("catalog"); },
+    dec: function () {
+        if (state.qty > 1) { state.qty--; document.getElementById("qty").textContent = state.qty; }
+    },
+    inc: function () {
+        if (state.qty < MAX_QTY) { state.qty++; document.getElementById("qty").textContent = state.qty; }
+    },
+    add: function () {
+        addToCart(state.product.id, state.qty);
+        state.message = "Added " + state.qty + " \u00d7 " + state.product.name + " to cart.";
+        render();   // stay on the product screen; refreshes the cart count
+    },
+    clear: function () { clearCart(); render(); },
+    checkout: function () { if (checkout()) goTo("done"); }
+};
+
+
+window.miniShop = {
+    get order() { return state.order ? state.order.slice() : null; },
+    get success() {
+        var o = state.order;
+        return !!o && o.length === 1 && o[0].id === goal.item && o[0].qty === goal.qty;
+    }
+};
+
+function init() {
+    goTo("catalog");
+}
+init();
