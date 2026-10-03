@@ -1,4 +1,4 @@
-#include "WebSocketEndpoint.h"
+#include "utils_structs.h"
 
 /*
 parse_ws_url: Parse the WebSocket URL and return the host, port, and path.

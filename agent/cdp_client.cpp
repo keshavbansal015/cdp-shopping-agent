@@ -29,9 +29,8 @@ CDPClient::~CDPClient() {
 
 // Send a CDP command and wait for the response having
 // the corresponding "id".
-CDPClient::json CDPClient::command(const std::string &method,
-                                   const json &params,
-                                   const std::string &session_id) {
+json CDPClient::command(const std::string &method, const json &params,
+                        const std::string &session_id) {
 
   int id = next_id_++;
   json message = {{"id", id}, {"method", method}, {"params", params}};
@@ -52,6 +51,7 @@ CDPClient::json CDPClient::command(const std::string &method,
     // CDP also sends asynchronous events. They do not have
     // an "id", so ignore them here.
     if (!response.contains("id")) {
+      handle_event(response);
       continue;
     }
 
@@ -66,3 +66,23 @@ CDPClient::json CDPClient::command(const std::string &method,
     return response;
   }
 }
+void CDPClient::handleEvent(const json &event) {
+  if (!event.contains("method"))
+    return;
+
+  const std::string method = event["method"].get < std::string();
+
+  if (method == "Page.javascriptDialogOpening") {
+    popupShowing_ = true;
+
+    try {
+      command("Page.handleJavaScriptDialog", {{"accept", false}});
+    } catch (const std::runtime_error &e) {
+      // Ignore errors from handleJavaScriptDialog
+    }
+  }
+}
+
+bool CDPClient::popupShowing() const { return popupShowing_; }
+
+void CDPClient::clearPopupFlag() { popupShowing_ = false; }

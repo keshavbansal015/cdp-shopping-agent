@@ -32,6 +32,10 @@ public:
   // the corresponding "id".
   json command(const std::string &method, const json &params = json::object(),
                const std::string &session_id = "");
+  void handle_event(const json &event);
+
+  bool popupShowing() const;
+  void clearPopupFlag();
 
 private:
   asio::io_context io_;
@@ -39,4 +43,5 @@ private:
   websocket::stream<tcp::socket> ws_;
 
   int next_id_;
+  bool popupShowing_ = false;
 };
