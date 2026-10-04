@@ -2,7 +2,6 @@
 #include "params.h"
 #include "utils.h"
 #include <iostream>
-#include "utils.h"
 
 using json = nlohmann::json;
 
@@ -193,4 +192,202 @@ StepResult Agent::step(const std::string &action) {
   writeLog(action, result, elapsedMs(start), wasPopup || cdp_->popupShowing());
 
   return result;
+}
+
+void Agent::connectToChromium() {
+  std::string version;
+
+  for (int i = 0; i < 100; ++i) {
+    try {
+      version =
+          http_get("127.0.0.1", std::to_string(CDP_PORT), "/json/version");
+
+      break;
+    } catch (...) {
+      if (i == 99)
+        throw;
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+
+  json versionJson = json::parse(version);
+
+  std::string browserWs =
+      versionJson.at("webSocketDebuggerUrl").get<std::string>();
+
+  WebSocketEndpoint endpoint = parse_ws_url(browserWs);
+
+  cdp_ =
+      std::make_unique<CDPClient>(endpoint.host, endpoint.port, endpoint.path);
+}
+
+json Agent::observe() {
+  json result;
+
+  // We use one JS expression only to READ the DOM.
+  // It does not click anything.
+  const std::string script = R"JS(
+(() => {
+    function visible(el) {
+        const s = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+
+        return (
+            s.display !== "none" &&
+            s.visibility !== "hidden" &&
+            parseFloat(s.opacity || "1") > 0 &&
+            r.width > 0 &&
+            r.height > 0 &&
+            r.bottom >= 0 &&
+            r.right >= 0 &&
+            r.top <= window.innerHeight &&
+            r.left <= window.innerWidth
+        );
+    }
+
+    function text(el) {
+        return (el.innerText || el.textContent || "")
+            .replace(/\\s+/g, " ")
+            .trim();
+    }
+
+    const screenElement =
+        document.querySelector("[data-screen]");
+
+    const goalElement =
+        document.querySelector("[data-goal]");
+
+    const elements =
+        Array.from(
+            document.querySelectorAll(
+                "button, [role='button']"
+            )
+        );
+
+    const buttons = [];
+
+    for (const el of elements) {
+        if (!visible(el))
+            continue;
+
+        const r =
+            el.getBoundingClientRect();
+
+        const disabled =
+            el.disabled === true ||
+            el.getAttribute("aria-disabled") === "true" ||
+            el.hasAttribute("disabled");
+
+        buttons.push({
+            text: text(el),
+            clickable: !disabled,
+            x: r.left,
+            y: r.top,
+            width: r.width,
+            height: r.height
+        });
+    }
+
+    const success =
+        document.querySelector(
+            "[data-order-complete='true']"
+        ) !== null;
+
+    return {
+        screen: screenElement
+            ? text(screenElement)
+            : "",
+        goal: goalElement
+            ? text(goalElement)
+            : "",
+        buttons: buttons,
+        orderComplete: success
+    };
+})()
+)JS";
+
+  json evaluation = cdp_->command(
+      "Runtime.evaluate",
+      {{"expression", script}, {"returnByValue", true}, {"awaitPromise", true}},
+      sessionId_);
+
+  json remote = evaluation["result"]["result"];
+
+  if (!remote.contains("value"))
+    throw std::runtime_error("Could not read page observation");
+
+  json page = remote["value"];
+  result["screen"] = page.value("screen", std::string{});
+  result["goal"] = page.value("goal", std::string{});
+  result["buttons"] = json::array();
+
+  const auto &pageButtons = page["buttons"];
+
+  for (size_t i = 0; i < pageButtons.size(); ++i) {
+    const auto &b = pageButtons[i];
+    result["buttons"].push_back({{"i", i},
+                                 {"text", b.value("text", std::string{})},
+                                 {"clickable", b.value("clickable", false)}});
+  }
+
+  return result;
+}
+
+void Agent::realMouseClick(double x, double y, double width, double height) {
+  double cx = x + width / 2.0;
+
+  double cy = y + height / 2.0;
+
+  cdp_->command(
+      "Input.dispatchMouseEvent",
+      {{"type", "mouseMoved"}, {"x", cx}, {"y", cy}, {"button", "none"}},
+      sessionId_);
+
+  cdp_->command("Input.dispatchMouseEvent",
+                {{"type", "mousePressed"},
+                 {"x", cx},
+                 {"y", cy},
+                 {"button", "left"},
+                 {"clickCount", 1}},
+                sessionId_);
+
+  cdp_->command("Input.dispatchMouseEvent",
+                {{"type", "mouseReleased"},
+                 {"x", cx},
+                 {"y", cy},
+                 {"button", "left"},
+                 {"clickCount", 1}},
+                sessionId_);
+}
+
+bool Agent::isOrderComplete() {
+  const std::string script = R"JS(
+(() => {
+    return document.querySelector(
+        "[data-order-complete='true']"
+    ) !== null;
+})()
+)JS";
+
+  json response = cdp_->command(
+      "Runtime.evaluate", {{"expression", script}, {"returnByValue", true}},
+      sessionId_);
+
+  return response["result"]["result"]["value"].get<bool>();
+}
+
+void Agent::waitForPage() {
+  // The controller has a hard upper bound. We do not
+  // depend on a particular page's network behavior.
+  for (int i = 0; i < 20; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    try {
+      observe();
+      return;
+    } catch (...) {
+      // Document may not yet exist.
+    }
+  }
 }
