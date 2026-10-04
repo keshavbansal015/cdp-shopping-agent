@@ -18,7 +18,7 @@ struct WebSocketEndpoint {
 
 struct StepResult {
   json observation;
-  int reward = 0;
+  double reward = 0;
   bool done = false;
   bool timedOut = false;
   json info;

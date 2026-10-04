@@ -45,11 +45,12 @@
         });
     }
 
-    const success = (screenElement && screenElement.getAttribute("data-screen") === "done") || (window.miniShop && window.miniShop.success);
+    const success = !!((screenElement && screenElement.getAttribute("data-screen") === "done") || (window.miniShop && window.miniShop.success));
     const qtyElem = document.getElementById("qty");
+    const qty = qtyElem ? (parseInt(qtyElem.textContent.trim(), 10) || 0) : 0;
     const titleElem = document.querySelector("h2");
     const overlayElem = document.getElementById("overlay");
-    const isPopup = overlayElem && !overlayElem.hidden;
+    const isPopup = !!(overlayElem && !overlayElem.hidden);
     const cart = (typeof state !== "undefined" && state.cart) ? state.cart : [];
     const productId = (typeof state !== "undefined" && state.product) ? (state.product.id || "") : "";
 
