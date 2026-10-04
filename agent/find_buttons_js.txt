@@ -1,0 +1,47 @@
+(() => {
+    function visible(el) {
+        const s = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+
+        return (
+            s.display !== "none" &&
+            s.visibility !== "hidden" &&
+            parseFloat(s.opacity || "1") > 0 &&
+            r.width > 0 &&
+            r.height > 0 &&
+            r.bottom >= 0 &&
+            r.right >= 0 &&
+            r.top <= window.innerHeight &&
+            r.left <= window.innerWidth
+        );
+    }
+
+    const result = [];
+
+    for (const el of
+         document.querySelectorAll(
+             "button, [role='button']"
+         )) {
+
+        if (!visible(el))
+            continue;
+
+        const r =
+            el.getBoundingClientRect();
+
+        result.push({
+            clickable:
+                !el.disabled &&
+                el.getAttribute("aria-disabled")
+                    !== "true" &&
+                !el.hasAttribute("disabled"),
+
+            x: r.left,
+            y: r.top,
+            width: r.width,
+            height: r.height
+        });
+    }
+
+    return result;
+})()

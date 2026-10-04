@@ -235,6 +235,11 @@ function makeRng(seed) {
 var rand = makeRng(goal.seed);
 
 function afterScreenChange(screen) {
+    // only if the url has item word in it
+    if (!window.location.href.includes("item")) {
+        return;
+    }
+
     // reset leftovers from the previous screen
     clearTimeout(delayTimer);
     delayTimer = null;

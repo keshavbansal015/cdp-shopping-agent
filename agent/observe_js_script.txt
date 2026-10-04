@@ -22,18 +22,8 @@
             .trim();
     }
 
-    const screenElement =
-        document.querySelector("[data-screen]");
-
-    const goalElement =
-        document.querySelector("[data-goal]");
-
-    const elements =
-        Array.from(
-            document.querySelectorAll(
-                "button, [role='button']"
-            )
-        );
+    const screenElement = document.querySelector("[data-screen]");
+    const elements = Array.from(document.querySelectorAll("button, [role='button']"));
 
     const buttons = [];
 
@@ -41,13 +31,9 @@
         if (!visible(el))
             continue;
 
-        const r =
-            el.getBoundingClientRect();
+        const r = el.getBoundingClientRect();
 
-        const disabled =
-            el.disabled === true ||
-            el.getAttribute("aria-disabled") === "true" ||
-            el.hasAttribute("disabled");
+        const disabled = el.disabled === true || el.getAttribute("aria-disabled") === "true" || el.hasAttribute("disabled");
 
         buttons.push({
             text: text(el),
@@ -59,18 +45,10 @@
         });
     }
 
-    const success =
-        document.querySelector(
-            "[data-order-complete='true']"
-        ) !== null; 
+    const success = (screenElement && screenElement.getAttribute("data-screen") === "done") || (window.miniShop && window.miniShop.success);
 
     return {
-        screen: screenElement
-            ? text(screenElement)
-            : "",
-        goal: goalElement
-            ? text(goalElement)
-            : "",
+        screen: screenElement ? screenElement.getAttribute("data-screen") : "",
         buttons: buttons,
         orderComplete: success
     };

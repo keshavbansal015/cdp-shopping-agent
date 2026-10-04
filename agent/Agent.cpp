@@ -30,12 +30,11 @@ Tear down the current tab, and start a new episode.
 - Enable Page and Runtime domains.
 - Navigate to the given task URL with the seed.
 */
-json Agent::reset(const std::string &task, int seed) {
+json Agent::reset(const std::string &task) {
   ++episode_;
   stepNumber_ = 0;
 
   currentTask_ = task;
-  currentSeed_ = seed;
   if (!sessionId_.empty()) {
     try {
       cdp_->command("Target.closeTarget", {{"targetId", targetId_}});
@@ -46,23 +45,37 @@ json Agent::reset(const std::string &task, int seed) {
 
   // start from the blank page, redirect to test url later
   json target = cdp_->command("Target.createTarget", {{"url", "about:blank"}});
-
   targetId_ = target["result"]["targetId"].get<std::string>();
 
+  // attach to the new tab, flatten adds the session_id by default
   json attach = cdp_->command("Target.attachToTarget",
-                              {{"targetId", targetId_}, {"flatten", true}}, sessionId_);
-
+                              {{"targetId", targetId_}, {"flatten", true}});
   sessionId_ = attach["result"]["sessionId"].get<std::string>();
 
+  // enable Page and Runtime domains
   cdp_->command("Page.enable", {}, sessionId_);
   cdp_->command("Runtime.enable", {}, sessionId_);
   cdp_->command("Page.setLifecycleEventsEnabled", {{"enabled", true}},
                 sessionId_);
 
+  // reset popup flag, doesn't really do anything though. Might remove it soon.
   cdp_->clearPopupFlag();
 
-  std::string url = addSeedToUrl(task, seed);
+  // might not need this, keeping it for now
+  // std::string url = addSeedToUrl(task, seed);
+  std::string url = task;
 
+  // url eg: index.html?item=blue-mug&qty=2&seed=42&popup_p=0.15&delay_p=0.10
+  // extract item and qty
+  size_t itemPos = url.find("item=");
+  size_t qtyPos = url.find("qty=");
+  size_t seedPos = url.find("seed=");
+
+  std::string item = url.substr(itemPos + 5, qtyPos - itemPos - 6);
+  std::string qty = url.substr(qtyPos + 4, seedPos - qtyPos - 5);
+
+  goalMap_[item] = std::stoi(qty);
+  // navigate to the test url
   cdp_->command("Page.navigate", {{"url", url}}, sessionId_);
 
   // Wait for the initial page to settle, but do not
@@ -240,90 +253,16 @@ void Agent::connectToChromium() {
       std::make_unique<CDPClient>(endpoint.host, endpoint.port, endpoint.path);
 }
 
+/*
+Returns the screen content (the text inside [data-screen] element),
+button indices, whether order is complete, etc.  See observe_js_script.txt.
+*/
 json Agent::observe() {
   json result;
 
-  // We use one JS expression only to READ the DOM.
+  // Using one JS expression only to READ the DOM.
   // It does not click anything.
-  const std::string script = R"JS(
-(() => {
-    function visible(el) {
-        const s = getComputedStyle(el);
-        const r = el.getBoundingClientRect();
-
-        return (
-            s.display !== "none" &&
-            s.visibility !== "hidden" &&
-            parseFloat(s.opacity || "1") > 0 &&
-            r.width > 0 &&
-            r.height > 0 &&
-            r.bottom >= 0 &&
-            r.right >= 0 &&
-            r.top <= window.innerHeight &&
-            r.left <= window.innerWidth
-        );
-    }
-
-    function text(el) {
-        return (el.innerText || el.textContent || "")
-            .replace(/\\s+/g, " ")
-            .trim();
-    }
-
-    const screenElement =
-        document.querySelector("[data-screen]");
-
-    const goalElement =
-        document.querySelector("[data-goal]");
-
-    const elements =
-        Array.from(
-            document.querySelectorAll(
-                "button, [role='button']"
-            )
-        );
-
-    const buttons = [];
-
-    for (const el of elements) {
-        if (!visible(el))
-            continue;
-
-        const r =
-            el.getBoundingClientRect();
-
-        const disabled =
-            el.disabled === true ||
-            el.getAttribute("aria-disabled") === "true" ||
-            el.hasAttribute("disabled");
-
-        buttons.push({
-            text: text(el),
-            clickable: !disabled,
-            x: r.left,
-            y: r.top,
-            width: r.width,
-            height: r.height
-        });
-    }
-
-    const success =
-        document.querySelector(
-            "[data-order-complete='true']"
-        ) !== null;
-
-    return {
-        screen: screenElement
-            ? text(screenElement)
-            : "",
-        goal: goalElement
-            ? text(goalElement)
-            : "",
-        buttons: buttons,
-        orderComplete: success
-    };
-})()
-)JS";
+  const std::string script = readScript("observe_js_script.txt");
 
   json evaluation = cdp_->command(
       "Runtime.evaluate",
@@ -337,7 +276,6 @@ json Agent::observe() {
 
   json page = remote["value"];
   result["screen"] = page.value("screen", std::string{});
-  result["goal"] = page.value("goal", std::string{});
   result["buttons"] = json::array();
 
   const auto &pageButtons = page["buttons"];
@@ -353,55 +291,7 @@ json Agent::observe() {
 }
 
 std::vector<Agent::Button> Agent::discoverButtons() {
-  const std::string script = R"JS(
-(() => {
-    function visible(el) {
-        const s = getComputedStyle(el);
-        const r = el.getBoundingClientRect();
-
-        return (
-            s.display !== "none" &&
-            s.visibility !== "hidden" &&
-            parseFloat(s.opacity || "1") > 0 &&
-            r.width > 0 &&
-            r.height > 0 &&
-            r.bottom >= 0 &&
-            r.right >= 0 &&
-            r.top <= window.innerHeight &&
-            r.left <= window.innerWidth
-        );
-    }
-
-    const result = [];
-
-    for (const el of
-         document.querySelectorAll(
-             "button, [role='button']"
-         )) {
-
-        if (!visible(el))
-            continue;
-
-        const r =
-            el.getBoundingClientRect();
-
-        result.push({
-            clickable:
-                !el.disabled &&
-                el.getAttribute("aria-disabled")
-                    !== "true" &&
-                !el.hasAttribute("disabled"),
-
-            x: r.left,
-            y: r.top,
-            width: r.width,
-            height: r.height
-        });
-    }
-
-    return result;
-})()
-)JS";
+  const std::string script = readScript("find_buttons_js.txt");
 
   json response = cdp_->command(
       "Runtime.evaluate", {{"expression", script}, {"returnByValue", true}},
@@ -525,7 +415,7 @@ void Agent::writeLog(const std::string &action, const StepResult &result,
   log_.flush();
 }
 
-std::string Agent::addSeedToUrl(std::string url, long long seed) {
-  char separator = url.find('?') == std::string::npos ? '?' : '&';
-  return url + separator + "seed=" + std::to_string(seed);
-}
+// std::string Agent::addSeedToUrl(std::string url, int seed) {
+//   char separator = url.find('?') == std::string::npos ? '?' : '&';
+//   return url + separator + "seed=" + std::to_string(seed);
+// }

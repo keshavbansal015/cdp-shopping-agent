@@ -1,19 +1,21 @@
 #pragma once
-#include "chromium_process.h"
 #include "cdp_client.h"
+#include "chromium_process.h"
 #include "utils_structs.h"
 #include <fstream>
 #include <memory>
-#include <string>
-#include <vector>
 #include <nlohmann/json.hpp>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 using json = nlohmann::json;
 
 class Agent {
 public:
+  std::unordered_map<std::string, int> goalMap_;
   Agent(const std::string &chromiumPath, const std::string &logPath);
-  json reset(const std::string &task, long long seed);
+  json reset(const std::string &task);
   StepResult step(const std::string &action);
   ~Agent();
 
@@ -31,12 +33,11 @@ private:
 
   Chromium chromium_;
   std::unique_ptr<CDPClient> cdp_;
-  std::string targetId_; // browser tab id
+  std::string targetId_;  // browser tab id
   std::string sessionId_; // session id
   std::ofstream log_;
 
   int episode_ = 0;
-  int currentSeed_ = 0;
   int stepNumber_ = 0;
   std::string currentTask_;
 
@@ -50,5 +51,5 @@ private:
   bool waitUntilStable(int timeoutMs);
   void writeLog(const std::string &action, const StepResult &result,
                 long long elapsed, bool popup);
-  static std::string addSeedToUrl(std::string url, long long seed);
+  // static std::string addSeedToUrl(std::string url, int seed);
 };
