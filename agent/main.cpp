@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     // ----------------------------------------------------
 
     std::string url = generateTest()[0];
-    json observation = agent.reset(url, 42);
+    json observation = agent.reset(url);
 
     std::cout << "reset:\n" << observation.dump(2) << "\n";
 

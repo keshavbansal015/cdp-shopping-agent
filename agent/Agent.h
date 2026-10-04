@@ -40,7 +40,7 @@ private:
   int episode_ = 0;
   int stepNumber_ = 0;
   std::string currentTask_;
-
+  int currentSeed_;
   // Helper methods
   void connectToChromium();
   json observe();

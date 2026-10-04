@@ -33,6 +33,7 @@ Tear down the current tab, and start a new episode.
 json Agent::reset(const std::string &task) {
   ++episode_;
   stepNumber_ = 0;
+  goalMap_.clear();
 
   currentTask_ = task;
   if (!sessionId_.empty()) {
@@ -61,20 +62,29 @@ json Agent::reset(const std::string &task) {
   // reset popup flag, doesn't really do anything though. Might remove it soon.
   cdp_->clearPopupFlag();
 
-  // might not need this, keeping it for now
-  // std::string url = addSeedToUrl(task, seed);
   std::string url = task;
 
-  // url eg: index.html?item=blue-mug&qty=2&seed=42&popup_p=0.15&delay_p=0.10
-  // extract item and qty
-  size_t itemPos = url.find("item=");
-  size_t qtyPos = url.find("qty=");
-  size_t seedPos = url.find("seed=");
+  // parse query parameters safely
+  auto getParam = [&url](const std::string &key) -> std::string {
+    std::string pattern = key + "=";
+    size_t pos = url.find(pattern);
+    if (pos == std::string::npos) return "";
+    size_t start = pos + pattern.length();
+    size_t end = url.find('&', start);
+    return (end == std::string::npos) ? url.substr(start) : url.substr(start, end - start);
+  };
 
-  std::string item = url.substr(itemPos + 5, qtyPos - itemPos - 6);
-  std::string qty = url.substr(qtyPos + 4, seedPos - qtyPos - 5);
+  std::string item = getParam("item");
+  std::string qtyStr = getParam("qty");
+  std::string seedStr = getParam("seed");
 
-  goalMap_[item] = std::stoi(qty);
+  if (!seedStr.empty()) {
+    try { currentSeed_ = std::stoi(seedStr); } catch (...) {}
+  }
+  if (!item.empty() && !qtyStr.empty()) {
+    try { goalMap_[item] = std::stoi(qtyStr); } catch (...) {}
+  }
+
   // navigate to the test url
   cdp_->command("Page.navigate", {{"url", url}}, sessionId_);
 
@@ -104,7 +114,6 @@ StepResult Agent::step(const std::string &action) {
   const auto start = std::chrono::steady_clock::now();
 
   StepResult result;
-
   stepNumber_++;
 
   const bool wasPopup = cdp_->popupShowing();
@@ -116,9 +125,7 @@ StepResult Agent::step(const std::string &action) {
       result.timedOut = true;
 
       result.observation = observe();
-
       result.info = {{"reason", "maximum step count reached"}};
-
       writeLog(action, result, elapsedMs(start), wasPopup);
 
       return result;
@@ -138,7 +145,6 @@ StepResult Agent::step(const std::string &action) {
 
       try {
         size_t consumed = 0;
-
         long long parsed = std::stoll(inside, &consumed);
 
         if (consumed != inside.size() || parsed < 0) {
@@ -196,6 +202,9 @@ StepResult Agent::step(const std::string &action) {
     bool success = isOrderComplete();
 
     if (success) {
+
+      
+
       result.reward = 1;
       result.done = true;
 
@@ -290,6 +299,11 @@ json Agent::observe() {
   return result;
 }
 
+/*
+Returns all the buttons that are clickable and visible on the screen.
+
+Returns: x, y, width, height of the button and whether it is clickable.
+*/
 std::vector<Agent::Button> Agent::discoverButtons() {
   const std::string script = readScript("find_buttons_js.txt");
 
@@ -314,9 +328,11 @@ std::vector<Agent::Button> Agent::discoverButtons() {
   return result;
 }
 
+/*
+Performs a real mouse click on the button.
+*/
 void Agent::realMouseClick(double x, double y, double width, double height) {
   double cx = x + width / 2.0;
-
   double cy = y + height / 2.0;
 
   cdp_->command(
@@ -331,22 +347,28 @@ void Agent::realMouseClick(double x, double y, double width, double height) {
                  {"button", "left"},
                  {"clickCount", 1}},
                 sessionId_);
-
-  cdp_->command("Input.dispatchMouseEvent",
-                {{"type", "mouseReleased"},
-                 {"x", cx},
-                 {"y", cy},
-                 {"button", "left"},
-                 {"clickCount", 1}},
-                sessionId_);
 }
 
+/*
+Returns true if the order is complete and the ordered items match goalMap_.
+Checks:
+- The screen is "done" (document.body attribute data-screen == "done")
+- The items placed in the order match all items & quantities in goalMap_
+*/
 bool Agent::isOrderComplete() {
   const std::string script = R"JS(
 (() => {
-    return document.querySelector(
-        "[data-order-complete='true']"
-    ) !== null;
+    const isDone = document.body.getAttribute("data-screen") === "done" ||
+                   document.querySelector("[data-screen='done']") !== null;
+    if (!isDone) {
+        return { isDone: false, order: null };
+    }
+
+    const order = (window.miniShop && window.miniShop.order) ? window.miniShop.order : [];
+    return {
+        isDone: true,
+        order: order
+    };
 })()
 )JS";
 
@@ -354,7 +376,36 @@ bool Agent::isOrderComplete() {
       "Runtime.evaluate", {{"expression", script}, {"returnByValue", true}},
       sessionId_);
 
-  return response["result"]["result"]["value"].get<bool>();
+  json val = response["result"]["result"]["value"];
+  if (!val.value("isDone", false)) {
+    return false;
+  }
+
+  // Extract ordered items from the JS state: array of {id: string, qty: int}
+  std::unordered_map<std::string, int> orderMap;
+  if (val.contains("order") && val["order"].is_array()) {
+    for (const auto &item : val["order"]) {
+      std::string id = item.value("id", "");
+      int qty = item.value("qty", 0);
+      if (!id.empty()) {
+        orderMap[id] += qty;
+      }
+    }
+  }
+
+  // Match against goalMap_
+  if (orderMap.size() != goalMap_.size()) {
+    return false;
+  }
+
+  for (const auto &[item, expectedQty] : goalMap_) {
+    auto it = orderMap.find(item);
+    if (it == orderMap.end() || it->second != expectedQty) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void Agent::waitForPage() {
@@ -372,6 +423,9 @@ void Agent::waitForPage() {
   }
 }
 
+/*
+Waits for the page to be stable for a given timeout in milliseconds.
+*/
 bool Agent::waitUntilStable(int timeoutMs) {
   auto start = std::chrono::steady_clock::now();
 
@@ -400,7 +454,6 @@ void Agent::writeLog(const std::string &action, const StepResult &result,
                      long long elapsed, bool popup) {
   json line = {{"episode", episode_},
                {"seed", currentSeed_},
-               {"goal", result.observation.value("goal", std::string{})},
                {"step", stepNumber_},
                {"action", action},
                {"observation", result.observation},
@@ -414,8 +467,3 @@ void Agent::writeLog(const std::string &action, const StepResult &result,
   log_ << line.dump() << '\n';
   log_.flush();
 }
-
-// std::string Agent::addSeedToUrl(std::string url, int seed) {
-//   char separator = url.find('?') == std::string::npos ? '?' : '&';
-//   return url + separator + "seed=" + std::to_string(seed);
-// }
