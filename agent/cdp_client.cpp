@@ -1,12 +1,14 @@
 #include "cdp_client.h"
 
+#include <stdexcept>
+#include <string>
+
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 #include <nlohmann/json.hpp>
-#include <stdexcept>
-#include <string>
+
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -18,7 +20,6 @@ CDPClient::CDPClient(const std::string &host, const std::string &port,
   auto endpoints = resolver_.resolve(host, port);
 
   asio::connect(ws_.next_layer(), endpoints);
-
   ws_.set_option(
       websocket::stream_base::timeout::suggested(beast::role_type::client));
 
@@ -27,7 +28,6 @@ CDPClient::CDPClient(const std::string &host, const std::string &port,
 
 CDPClient::~CDPClient() {
   beast::error_code ec;
-
   ws_.close(websocket::close_code::normal, ec);
 }
 
@@ -70,6 +70,7 @@ json CDPClient::command(const std::string &method, const json &params,
     return response;
   }
 }
+
 void CDPClient::handle_event(const json &event) {
   if (!event.contains("method"))
     return;
@@ -79,11 +80,11 @@ void CDPClient::handle_event(const json &event) {
   if (method == "Page.javascriptDialogOpening") {
     popupShowing_ = true;
 
-    try {
-      command("Page.handleJavaScriptDialog", {{"accept", false}});
-    } catch (const std::runtime_error &e) {
-      // Ignore errors from handleJavaScriptDialog
-    }
+    // try {
+    //   command("Page.handleJavaScriptDialog", {{"accept", false}});
+    // } catch (const std::runtime_error &e) {
+    //   // Ignore errors from handleJavaScriptDialog
+    // }
   }
 }
 

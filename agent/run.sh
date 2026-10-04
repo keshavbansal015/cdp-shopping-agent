@@ -1,3 +1,13 @@
 #!/bin/bash
+set -e
 
-g++ -std=c++17 -I/opt/homebrew/include main.cpp -o main
+# Compile all source files
+g++ -std=c++17 -I/opt/homebrew/include \
+    main.cpp \
+    utils.cpp \
+    cdp_client.cpp \
+    chromium_process.cpp \
+    agent.cpp \
+    -o main
+
+echo "Build successful: ./main"

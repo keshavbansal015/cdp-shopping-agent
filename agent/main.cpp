@@ -37,8 +37,8 @@ using tcp = asio::ip::tcp;
 
 int main(int argc, char *argv[]) {
   try {
-    const std::string chromium = argc >= 2 ? argv[1] : "chromium";
-
+    std::string chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    const std::string chromium = argc >= 2 ? argv[1] : chrome_path;
     const std::string logFile = argc >= 3 ? argv[2] : "agent.jsonl";
 
     Agent agent(chromium, logFile);
@@ -48,13 +48,11 @@ int main(int argc, char *argv[]) {
     // ----------------------------------------------------
 
     std::string url = generateTest()[0];
-
     json observation = agent.reset(url, 42);
 
     std::cout << "reset:\n" << observation.dump(2) << "\n";
 
     // An actual RL agent would choose these actions.
-    //
     // They are only examples demonstrating the API.
     std::vector<std::string> actions = {"wait", "click(0)"};
 

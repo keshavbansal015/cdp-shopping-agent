@@ -1,5 +1,5 @@
 #pragma once
-
+#include <string>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/websocket.hpp>
 #include <nlohmann/json.hpp>

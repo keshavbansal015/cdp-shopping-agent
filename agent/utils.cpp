@@ -1,5 +1,8 @@
 #include "utils.h"
 #include <random>
+#include <string>
+#include <vector>
+#include <stdexcept>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -17,7 +20,7 @@ std::vector<std::string> generateTest() {
   std::uniform_real_distribution<double> distrib(0.0, 1.0);
   std::uniform_int_distribution<int> product_dist(0, 3);
   std::uniform_int_distribution<int> quantity_dist(0, 2);
-  const vector<string> products(
+  const std::vector<std::string> products(
       {"blue-mug", "red-hat", "green-lamp", "yellow-notebook"});
   const int quantities[] = {1, 2, 3};
 
@@ -27,7 +30,7 @@ std::vector<std::string> generateTest() {
 
   std::string root_url = "file:///Users/keshavbansal/keshav/dev_test/"
                          "cdp-shopping-agent/site/index.html?seed=" +
-                         to_string(seed);
+                         std::to_string(seed);
 
   std::vector<std::string> test;
 
@@ -37,8 +40,8 @@ std::vector<std::string> generateTest() {
     std::string product = products[product_dist(gen)];
     int quantity = quantities[quantity_dist(gen)];
     std::string url =
-        root_url + "&item=" + product + "&qty=" + to_string(quantity) +
-        "&popup_p=" + to_string(popup_p) + "&delay_p=" + to_string(delay_p);
+        root_url + "&item=" + product + "&qty=" + std::to_string(quantity) +
+        "&popup_p=" + std::to_string(popup_p) + "&delay_p=" + std::to_string(delay_p);
     test.push_back(url);
   }
   return test;

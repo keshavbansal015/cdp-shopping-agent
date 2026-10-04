@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
@@ -30,12 +31,12 @@ private:
 
   Chromium chromium_;
   std::unique_ptr<CDPClient> cdp_;
-  std::string targetId_;
-  std::string sessionId_;
+  std::string targetId_; // browser tab id
+  std::string sessionId_; // session id
   std::ofstream log_;
 
-  long long episode_ = 0;
-  long long currentSeed_ = 0;
+  int episode_ = 0;
+  int currentSeed_ = 0;
   int stepNumber_ = 0;
   std::string currentTask_;
 

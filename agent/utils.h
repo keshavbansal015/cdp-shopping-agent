@@ -2,13 +2,12 @@
 
 #include "utils_structs.h"
 
-
 #include <chrono>
 #include <stdexcept>
 #include <string>
 
 
-
+std::vector<std::string> generateTest();
 WebSocketEndpoint parse_ws_url(const std::string &url);
 std::string http_get(const std::string &host, const std::string &port,
                      const std::string &target);

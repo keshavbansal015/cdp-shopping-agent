@@ -1,4 +1,4 @@
-#include "Agent.h"
+#include "agent.h"
 #include "params.h"
 #include "utils.h"
 #include <nlohmann/json.hpp>
@@ -20,13 +20,22 @@ Agent::~Agent() {
   chromium_.stop();
 }
 
-json Agent::reset(const std::string &task, long long seed) {
+/*
+Tear down the current tab, and start a new episode.
+- Increment episode counter.
+- Reset step counter.
+- Close current tab if it exists.
+- Create new tab.
+- Attach to new tab.
+- Enable Page and Runtime domains.
+- Navigate to the given task URL with the seed.
+*/
+json Agent::reset(const std::string &task, int seed) {
   ++episode_;
   stepNumber_ = 0;
 
   currentTask_ = task;
   currentSeed_ = seed;
-
   if (!sessionId_.empty()) {
     try {
       cdp_->command("Target.closeTarget", {{"targetId", targetId_}});
@@ -35,12 +44,13 @@ json Agent::reset(const std::string &task, long long seed) {
     }
   }
 
+  // start from the blank page, redirect to test url later
   json target = cdp_->command("Target.createTarget", {{"url", "about:blank"}});
 
   targetId_ = target["result"]["targetId"].get<std::string>();
 
   json attach = cdp_->command("Target.attachToTarget",
-                              {{"targetId", targetId_}, {"flatten", true}});
+                              {{"targetId", targetId_}, {"flatten", true}}, sessionId_);
 
   sessionId_ = attach["result"]["sessionId"].get<std::string>();
 
@@ -58,12 +68,25 @@ json Agent::reset(const std::string &task, long long seed) {
   // Wait for the initial page to settle, but do not
   // wait indefinitely.
   waitForPage();
-
   json observation = observe();
-
   return observation;
 }
 
+/*
+Execute a single step.
+- Increment step counter.
+- Parse action: must be "wait" or "click(index)".
+- If "wait": sleep for WAIT_MS.
+- If "click(index)":
+  - Re-discover all visible buttons.
+  - Validate index is in range.
+  - Validate button is clickable.
+  - Dispatch a real mouse click.
+- Wait until the page becomes stable (STEP_TIMEOUT_MS).
+- Observe the new page state.
+- Determine if the order is complete.
+- Return StepResult with reward, done, observation, info.
+*/
 StepResult Agent::step(const std::string &action) {
   const auto start = std::chrono::steady_clock::now();
 
@@ -201,23 +224,18 @@ void Agent::connectToChromium() {
     try {
       version =
           http_get("127.0.0.1", std::to_string(CDP_PORT), "/json/version");
-
       break;
     } catch (...) {
       if (i == 99)
         throw;
-
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
   }
 
   json versionJson = json::parse(version);
-
   std::string browserWs =
       versionJson.at("webSocketDebuggerUrl").get<std::string>();
-
   WebSocketEndpoint endpoint = parse_ws_url(browserWs);
-
   cdp_ =
       std::make_unique<CDPClient>(endpoint.host, endpoint.port, endpoint.path);
 }
@@ -489,7 +507,7 @@ bool Agent::waitUntilStable(int timeoutMs) {
 }
 
 void Agent::writeLog(const std::string &action, const StepResult &result,
-              long long elapsed, bool popup) {
+                     long long elapsed, bool popup) {
   json line = {{"episode", episode_},
                {"seed", currentSeed_},
                {"goal", result.observation.value("goal", std::string{})},
