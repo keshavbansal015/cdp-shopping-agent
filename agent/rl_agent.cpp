@@ -2,8 +2,8 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <vector>
 #include <string>
+#include <vector>
 
 // ------------------------------------------------------------
 // RandomAgent Implementation
@@ -12,9 +12,8 @@
 RandomAgent::RandomAgent(unsigned int seed) : rng_(seed) {}
 
 std::string RandomAgent::selectAction(const json &observation,
-                                      const std::string &/*targetItem*/,
-                                      int /*targetQty*/,
-                                      bool /*training*/) {
+                                      const std::string & /*targetItem*/,
+                                      int /*targetQty*/, bool /*training*/) {
   std::vector<std::string> validActions;
   validActions.push_back("wait");
 
@@ -36,14 +35,14 @@ std::string RandomAgent::selectAction(const json &observation,
 // ------------------------------------------------------------
 
 QLearningAgent::QLearningAgent(double alpha, double gamma, double epsilon,
-                             double epsilonDecay, double minEpsilon,
-                             unsigned int seed)
+                               double epsilonDecay, double minEpsilon,
+                               unsigned int seed)
     : alpha_(alpha), gamma_(gamma), epsilon_(epsilon),
       epsilonDecay_(epsilonDecay), minEpsilon_(minEpsilon), rng_(seed) {}
 
 std::string QLearningAgent::extractStateKey(const json &observation,
-                                           const std::string &targetItem,
-                                           int targetQty) const {
+                                            const std::string &targetItem,
+                                            int targetQty) const {
   std::string screen = observation.value("screen", "unknown");
   bool isPopup = observation.value("isPopup", false);
   int currentQty = observation.value("qty", 0);
@@ -59,13 +58,18 @@ std::string QLearningAgent::extractStateKey(const json &observation,
       }
     }
   }
-
+  std::string cartSummary;
+  if (observation.contains("cart") && observation["cart"].is_array()) {
+    for (const auto &item : observation["cart"]) {
+      cartSummary += item.value("id", std::string{}) + "x" +
+                     std::to_string(item.value("qty", 0)) + ",";
+    }
+  }
   return "goal:" + targetItem + "x" + std::to_string(targetQty) +
-         "|scr:" + screen +
-         "|pop:" + (isPopup ? "1" : "0") +
-         "|qty:" + std::to_string(currentQty) +
-         "|ttl:" + title +
-         "|btns:" + btnSummary;
+         "|scr:" + screen + "|pop:" + (isPopup ? "1" : "0") +
+         "|pid:" + observation.value("productId", std::string{}) +
+         "|pick:" + std::to_string(observation.value("qty", 0)) +
+         "|cart:" + cartSummary + "|btns:" + btnSummary;
 }
 
 std::vector<std::string>
@@ -85,7 +89,7 @@ QLearningAgent::getAvailableActions(const json &observation) const {
 }
 
 double QLearningAgent::getQ(const std::string &state,
-                           const std::string &action) const {
+                            const std::string &action) const {
   auto stateIt = qTable_.find(state);
   if (stateIt != qTable_.end()) {
     auto actIt = stateIt->second.find(action);
@@ -98,7 +102,7 @@ double QLearningAgent::getQ(const std::string &state,
 }
 
 double QLearningAgent::getMaxQ(const std::string &state,
-                              const std::vector<std::string> &actions) const {
+                               const std::vector<std::string> &actions) const {
   if (actions.empty())
     return 0.0;
   double maxVal = -1e9;
@@ -109,9 +113,8 @@ double QLearningAgent::getMaxQ(const std::string &state,
 }
 
 std::string QLearningAgent::selectAction(const json &observation,
-                                        const std::string &targetItem,
-                                        int targetQty,
-                                        bool training) {
+                                         const std::string &targetItem,
+                                         int targetQty, bool training) {
   std::vector<std::string> actions = getAvailableActions(observation);
   if (actions.empty()) {
     return "wait";
@@ -145,12 +148,9 @@ std::string QLearningAgent::selectAction(const json &observation,
   return bestActions[actDist(rng_)];
 }
 
-void QLearningAgent::update(const std::string &state,
-                           const std::string &action,
-                           double reward,
-                           const std::string &nextState,
-                           const json &nextObs,
-                           bool done) {
+void QLearningAgent::update(const std::string &state, const std::string &action,
+                            double reward, const std::string &nextState,
+                            const json &nextObs, bool done) {
   double currentQ = getQ(state, action);
   double nextMaxQ = 0.0;
   if (!done) {
@@ -164,10 +164,10 @@ void QLearningAgent::update(const std::string &state,
   qTable_[state][action] = newQ;
 
   // Log Q-value change
-  std::cout << "    [Q-Update] S: \"" << state.substr(0, 60) << "...\""
-            << " | A: " << action
-            << " | R: " << reward
-            << " | Q: " << currentQ << " -> " << newQ << "\n";
+  // std::cout << "    [Q-Update] S: \"" << state.substr(0, 60) << "...\""
+  //           << " | A: " << action
+  //           << " | R: " << reward
+  //           << " | Q: " << currentQ << " -> " << newQ << "\n";
 }
 
 void QLearningAgent::resetEpisode() {
@@ -187,6 +187,8 @@ void QLearningAgent::loadQTable(const std::string &filename) {
   if (file.is_open()) {
     json j;
     file >> j;
-    qTable_ = j.get<std::unordered_map<std::string, std::unordered_map<std::string, double>>>();
+    qTable_ =
+        j.get<std::unordered_map<std::string,
+                                 std::unordered_map<std::string, double>>>();
   }
 }

@@ -18,6 +18,11 @@ public:
   virtual void update(const std::string &state, const std::string &action,
                       double reward, const std::string &nextState,
                       const json &nextObs, bool done) {}
+  virtual std::string extractStateKey(const json &observation,
+                                      const std::string &targetItem,
+                                      int targetQty) const {
+    return "";
+  }
   virtual void resetEpisode() {}
 };
 
@@ -50,7 +55,7 @@ public:
 
   std::string extractStateKey(const json &observation,
                               const std::string &targetItem,
-                              int targetQty) const;
+                              int targetQty) const override;
   std::vector<std::string> getAvailableActions(const json &observation) const;
 
   void saveQTable(const std::string &filename) const;

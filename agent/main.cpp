@@ -1,14 +1,14 @@
-#include <iostream>
-#include <iomanip>
 #include <chrono>
-#include <string>
-#include <vector>
-#include <unordered_map>
+#include <iomanip>
+#include <iostream>
 #include <nlohmann/json.hpp>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "agent.h"
-#include "rl_agent.h"
 #include "params.h"
+#include "rl_agent.h"
 #include "utils.h"
 
 using json = nlohmann::json;
@@ -26,46 +26,41 @@ struct Goal {
 //   {"yellow-notebook", 1}, {"yellow-notebook", 2}, {"yellow-notebook", 3}
 // };
 
-const std::vector<Goal> ALL_GOALS = {
-  {"yellow-notebook", 1}
-};
-
+const std::vector<Goal> ALL_GOALS = {{"yellow-notebook", 1}};
 
 // const std::vector<int> SEEDS = {42, 101, 2024};
 const std::vector<int> SEEDS = {42};
 
-std::string buildUrl(const std::string &item, int qty, int seed, double popup_p = 0.10, double delay_p = 0.05) {
-  return "file:///Users/keshavbansal/keshav/dev_test/cdp-shopping-agent/site/index.html?seed=" +
-         std::to_string(seed) + "&item=" + item + "&qty=" + std::to_string(qty) +
-         "&popup_p=" + std::to_string(popup_p) + "&delay_p=" + std::to_string(delay_p);
+std::string buildUrl(const std::string &item, int qty, int seed,
+                     double popup_p = 0.10, double delay_p = 0.05) {
+  return "file:///Users/keshavbansal/keshav/dev_test/cdp-shopping-agent/site/"
+         "index.html?seed=" +
+         std::to_string(seed) + "&item=" + item +
+         "&qty=" + std::to_string(qty) + "&popup_p=" + std::to_string(popup_p) +
+         "&delay_p=" + std::to_string(delay_p);
 }
 
 // Run single episode for an agent
-bool runEpisode(Agent &env, BaseRLAgent &rlAgent, const Goal &goal, int seed, bool training, QLearningAgent *qAgent = nullptr) {
+bool runEpisode(Agent &env, BaseRLAgent &rlAgent, const Goal &goal, int seed,
+                bool training) {
   std::string url = buildUrl(goal.item, goal.qty, seed);
   json obs = env.reset(url, seed);
 
-  std::string stateKey;
-  if (qAgent) {
-    stateKey = qAgent->extractStateKey(obs, goal.item, goal.qty);
-  }
-
+  std::string stateKey = rlAgent.extractStateKey(obs, goal.item, goal.qty);
   bool success = false;
 
-  for (int step = 0; step < 20; ++step) {
-    std::string action = rlAgent.selectAction(obs, goal.item, goal.qty, training);
+  for (int step = 0; step < MAX_STEPS; ++step) {
+    std::string action =
+        rlAgent.selectAction(obs, goal.item, goal.qty, training);
     StepResult result = env.step(action);
-
-    double reward = result.reward;
-
-    if (qAgent && training) {
-      std::string nextStateKey = qAgent->extractStateKey(result.observation, goal.item, goal.qty);
-      qAgent->update(stateKey, action, reward, nextStateKey, result.observation, result.done);
-      stateKey = nextStateKey;
+    std::string nextStateKey =
+        rlAgent.extractStateKey(result.observation, goal.item, goal.qty);
+    if (training) {
+      rlAgent.update(stateKey, action, result.reward, nextStateKey,
+                     result.observation, result.done);
     }
-
+    stateKey = nextStateKey;
     obs = result.observation;
-
     if (result.done) {
       success = (result.reward > 0);
       break;
@@ -79,27 +74,33 @@ bool runEpisode(Agent &env, BaseRLAgent &rlAgent, const Goal &goal, int seed, bo
   return success;
 }
 
-void evaluateAgent(Agent &env, BaseRLAgent &rlAgent, const std::string &agentName, int testSeed) {
+void evaluateAgent(Agent &env, BaseRLAgent &rlAgent,
+                   const std::string &agentName, int testSeed) {
   int totalSuccesses = 0;
   int totalTrials = ALL_GOALS.size();
 
-  std::cout << "\n--- Evaluating " << agentName << " (Test Seed: " << testSeed << ") ---\n";
+  std::cout << "\n--- Evaluating " << agentName << " (Test Seed: " << testSeed
+            << ") ---\n";
 
   for (const auto &goal : ALL_GOALS) {
     bool passed = runEpisode(env, rlAgent, goal, testSeed, /*training=*/false);
-    std::cout << "  Goal: " << std::setw(15) << std::left << goal.item
-              << " x " << goal.qty << " -> " << (passed ? "PASS [✓]" : "FAIL [✗]") << "\n";
-    if (passed) totalSuccesses++;
+    std::cout << "  Goal: " << std::setw(15) << std::left << goal.item << " x "
+              << goal.qty << " -> " << (passed ? "PASS [✓]" : "FAIL [✗]")
+              << "\n";
+    if (passed)
+      totalSuccesses++;
   }
 
   double successRate = (100.0 * totalSuccesses) / totalTrials;
-  std::cout << ">> " << agentName << " Result: " << totalSuccesses << "/" << totalTrials
-            << " (" << std::fixed << std::setprecision(1) << successRate << "% success rate)\n";
+  std::cout << ">> " << agentName << " Result: " << totalSuccesses << "/"
+            << totalTrials << " (" << std::fixed << std::setprecision(1)
+            << successRate << "% success rate)\n";
 }
 
 int main(int argc, char *argv[]) {
   try {
-    std::string chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    std::string chrome_path =
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
     const std::string chromium = argc >= 2 ? argv[1] : chrome_path;
     const std::string logFile = argc >= 3 ? argv[2] : "agent.jsonl";
 
@@ -121,27 +122,33 @@ int main(int argc, char *argv[]) {
     std::cout << "\n  2. Tabular Q-Learning Agent";
     std::cout << "\n===============================\n";
 
+    QLearningAgent qAgent(/*alpha=*/0.25, /*gamma=*/0.95, /*epsilon=*/0.6,
+                          /*epsilonDecay=*/0.95, /*minEpsilon=*/0.05, 42);
+
     for (size_t runIdx = 0; runIdx < SEEDS.size(); ++runIdx) {
       int trainSeed = SEEDS[runIdx];
-      std::cout << "\n[Training Run " << (runIdx + 1) << "/3 with Seed " << trainSeed << "]\n";
-
-      QLearningAgent qAgent(/*alpha=*/0.25, /*gamma=*/0.95, /*epsilon=*/0.6, /*epsilonDecay=*/0.95, /*minEpsilon=*/0.05, trainSeed);
+      std::cout << "\n[Training Run " << (runIdx + 1) << "/3 with Seed "
+                << trainSeed << "]\n";
 
       // Training loop: Train over all 12 goals for multiple epochs
-      const int EPOCHS =50;
+      const int EPOCHS = 100;
       for (int epoch = 1; epoch <= EPOCHS; ++epoch) {
         int epochSuccess = 0;
         for (const auto &goal : ALL_GOALS) {
-          bool ok = runEpisode(env, qAgent, goal, trainSeed, /*training=*/true, &qAgent);
-          if (ok) epochSuccess++;
+          bool ok = runEpisode(env, qAgent, goal, trainSeed, /*training=*/true);
+          if (ok)
+            epochSuccess++;
         }
-        std::cout << "  Epoch " << epoch << "/" << EPOCHS << " - Training successes: "
-                  << epochSuccess << "/" << ALL_GOALS.size() << "\n";
+        std::cout << "  Epoch " << epoch << "/" << EPOCHS
+                  << " - Training successes: " << epochSuccess << "/"
+                  << ALL_GOALS.size() << "\n";
       }
 
       // Test Q-Learning Agent on unseen test seed
       int testSeed = trainSeed + 500;
-      evaluateAgent(env, qAgent, "QLearningAgent (Run " + std::to_string(runIdx + 1) + ")", testSeed);
+      evaluateAgent(env, qAgent,
+                    "QLearningAgent (Run " + std::to_string(runIdx + 1) + ")",
+                    testSeed);
     }
 
     std::cout << "\nAll runs completed successfully!\n";
