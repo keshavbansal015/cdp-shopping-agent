@@ -96,7 +96,7 @@ function renderCatalog() {
     return "<h2>Catalog</h2><ul class='ul.products'>" + PRODUCTS.map(product => {
         var res = "<li><span>" + product.name + "<span class='.price'> ";
         res += money(product.price) + "</span></span>";
-        res += "<button data-act='view' data-id='" + product.id + "'>View</button></li>";
+        res += "<button data-act='view' data-id='" + product.id + "'>" + product.id + "</button></li>";
         return res;
     }).join("") + "</ul>" + cartButton() + "<button data-act='newsletter'>Newsletter</button>";
 }
