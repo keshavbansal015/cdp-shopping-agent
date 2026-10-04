@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
       QLearningAgent qAgent(/*alpha=*/0.25, /*gamma=*/0.95, /*epsilon=*/0.6, /*epsilonDecay=*/0.95, /*minEpsilon=*/0.05, trainSeed);
 
       // Training loop: Train over all 12 goals for multiple epochs
-      const int EPOCHS =200;
+      const int EPOCHS =50;
       for (int epoch = 1; epoch <= EPOCHS; ++epoch) {
         int epochSuccess = 0;
         for (const auto &goal : ALL_GOALS) {
