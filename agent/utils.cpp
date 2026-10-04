@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <fstream>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -45,6 +46,29 @@ std::vector<std::string> generateTest() {
     test.push_back(url);
   }
   return test;
+}
+
+/*
+readScript: Read the content of a file and return it as a string.
+filename: The name of the file to read.
+Returns: The content of the file as a string.
+example: 
+string script = readScript("observe_js_script.txt");
+// the file content will be like
+(function() { ... })();
+*/
+std::string readScript(const std::string &filename) {
+  std::string script_content;
+  std::ifstream file(filename);
+  if (!file.is_open()) {
+    throw std::runtime_error("Failed to open file: " + filename);
+  }
+  std::string line;
+  while (std::getline(file, line)) {
+    script_content += line + "\n";
+  }
+  file.close();
+  return script_content;
 }
 
 /*

@@ -9,6 +9,7 @@
 
 std::vector<std::string> generateTest();
 WebSocketEndpoint parse_ws_url(const std::string &url);
+std::string readScript(const std::string &filename);
 std::string http_get(const std::string &host, const std::string &port,
                      const std::string &target);
 inline bool startsWith(const std::string &s, const std::string &prefix) {
