@@ -46,10 +46,17 @@
     }
 
     const success = (screenElement && screenElement.getAttribute("data-screen") === "done") || (window.miniShop && window.miniShop.success);
+    const qtyElem = document.getElementById("qty");
+    const titleElem = document.querySelector("h2");
+    const overlayElem = document.getElementById("overlay");
+    const isPopup = overlayElem && !overlayElem.hidden;
 
     return {
         screen: screenElement ? screenElement.getAttribute("data-screen") : "",
         buttons: buttons,
-        orderComplete: success
+        orderComplete: success,
+        qty: qtyElem ? parseInt(qtyElem.textContent.trim(), 10) : 0,
+        title: titleElem ? titleElem.textContent.trim() : "",
+        isPopup: !!isPopup
     };
 })()
