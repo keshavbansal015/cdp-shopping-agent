@@ -434,3 +434,8 @@ void Agent::writeLog(const std::string &action, const StepResult &result,
   log_ << line.dump() << '\n';
   log_.flush();
 }
+
+std::string Agent::addSeedToUrl(std::string url, long long seed) {
+  char separator = url.find('?') == std::string::npos ? '?' : '&';
+  return url + separator + "seed=" + std::to_string(seed);
+}

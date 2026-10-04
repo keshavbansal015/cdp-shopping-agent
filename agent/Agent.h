@@ -2,6 +2,8 @@
 #include "chromium_process.h"
 #include "cdp_client.h"
 #include "utils_structs.h"
+#include <fstream>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -11,7 +13,7 @@ using json = nlohmann::json;
 class Agent {
 public:
   Agent(const std::string &chromiumPath, const std::string &logPath);
-  json reset(const std::string &url, const int &seed);
+  json reset(const std::string &task, long long seed);
   StepResult step(const std::string &action);
   ~Agent();
 
@@ -48,4 +50,5 @@ private:
   bool waitUntilStable(int timeoutMs);
   void writeLog(const std::string &action, const StepResult &result,
                 long long elapsed, bool popup);
+  static std::string addSeedToUrl(std::string url, long long seed);
 };
