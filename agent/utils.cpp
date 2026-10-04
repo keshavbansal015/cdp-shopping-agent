@@ -1,4 +1,41 @@
+#include <random>
 #include "utils.h"
+
+
+std::vector<std::string> generateTest() {
+  using namespace std;
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<double> distrib(0.0, 1.0);
+  std::uniform_int_distribution<int> product_dist(0, 3);
+  std::uniform_int_distribution<int> quantity_dist(0, 2);
+  const vector<string> products(
+      {"blue-mug", "red-hat", "green-lamp", "yellow-notebook"});
+  const int quantities[] = {1, 2, 3};
+
+  const int seed = 42;
+  double popup_p = distrib(gen);
+  double delay_p = distrib(gen);
+
+  std::string root_url = "file:///Users/keshavbansal/keshav/dev_test/"
+                         "cdp-shopping-agent/site/index.html?seed=" +
+                         to_string(seed);
+
+  std::vector<std::string> test;
+
+  for (int i = 1; i <= 1; i++) {
+    double popup_p = distrib(gen);
+    double delay_p = distrib(gen);
+    std::string product = products[product_dist(gen)];
+    int quantity = quantities[quantity_dist(gen)];
+    std::string url =
+        root_url + "&item=" + product + "&qty=" + to_string(quantity) +
+        "&popup_p=" + to_string(popup_p) + "&delay_p=" + to_string(delay_p);
+    test.push_back(url);
+  }
+  return test;
+}
+
 /*
 parse_ws_url: Parse the WebSocket URL and return the host, port, and path.
 url: The WebSocket URL to parse.
@@ -65,19 +102,3 @@ std::string http_get(const std::string &host, const std::string &port,
   return response.body();
 }
 
-static bool startsWith(const std::string &s, const std::string &prefix) {
-  return s.rfind(prefix, 0) == 0;
-}
-
-static bool endsWith(const std::string &s, const std::string &suffix) {
-  if (suffix.size() > s.size())
-    return false;
-
-  return s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
-static long long elapsedMs(const std::chrono::steady_clock::time_point &start) {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::steady_clock::now() - start)
-      .count();
-}

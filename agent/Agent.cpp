@@ -334,6 +334,78 @@ json Agent::observe() {
   return result;
 }
 
+std::vector<Agent::Button> Agent::discoverButtons() {
+  const std::string script = R"JS(
+(() => {
+    function visible(el) {
+        const s = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+
+        return (
+            s.display !== "none" &&
+            s.visibility !== "hidden" &&
+            parseFloat(s.opacity || "1") > 0 &&
+            r.width > 0 &&
+            r.height > 0 &&
+            r.bottom >= 0 &&
+            r.right >= 0 &&
+            r.top <= window.innerHeight &&
+            r.left <= window.innerWidth
+        );
+    }
+
+    const result = [];
+
+    for (const el of
+         document.querySelectorAll(
+             "button, [role='button']"
+         )) {
+
+        if (!visible(el))
+            continue;
+
+        const r =
+            el.getBoundingClientRect();
+
+        result.push({
+            clickable:
+                !el.disabled &&
+                el.getAttribute("aria-disabled")
+                    !== "true" &&
+                !el.hasAttribute("disabled"),
+
+            x: r.left,
+            y: r.top,
+            width: r.width,
+            height: r.height
+        });
+    }
+
+    return result;
+})()
+)JS";
+
+  json response = cdp_->command(
+      "Runtime.evaluate", {{"expression", script}, {"returnByValue", true}},
+      sessionId_);
+
+  const json &values = response["result"]["result"]["value"];
+
+  std::vector<Button> result;
+
+  for (const auto &value : values) {
+    Button b;
+    b.clickable = value.value("clickable", false);
+    b.x = value.value("x", 0.0);
+    b.y = value.value("y", 0.0);
+    b.width = value.value("width", 0.0);
+    b.height = value.value("height", 0.0);
+    result.push_back(b);
+  }
+
+  return result;
+}
+
 void Agent::realMouseClick(double x, double y, double width, double height) {
   double cx = x + width / 2.0;
 

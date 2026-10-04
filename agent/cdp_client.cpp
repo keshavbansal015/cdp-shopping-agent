@@ -66,11 +66,11 @@ json CDPClient::command(const std::string &method, const json &params,
     return response;
   }
 }
-void CDPClient::handleEvent(const json &event) {
+void CDPClient::handle_event(const json &event) {
   if (!event.contains("method"))
     return;
 
-  const std::string method = event["method"].get < std::string();
+  const std::string method = event["method"].get<std::string>();
 
   if (method == "Page.javascriptDialogOpening") {
     popupShowing_ = true;
