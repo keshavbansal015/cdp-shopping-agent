@@ -391,3 +391,46 @@ void Agent::waitForPage() {
     }
   }
 }
+
+bool Agent::waitUntilStable(int timeoutMs) {
+  auto start = std::chrono::steady_clock::now();
+
+  // We deliberately don't require "network idle".
+  // Interactive pages can keep WebSockets/polling alive
+  // indefinitely.
+  while (true) {
+    try {
+      observe();
+      return true;
+    } catch (...) {
+    }
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - start)
+                       .count();
+
+    if (elapsed >= timeoutMs)
+      return false;
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+  }
+}
+
+void Agent::writeLog(const std::string &action, const StepResult &result,
+              long long elapsed, bool popup) {
+  json line = {{"episode", episode_},
+               {"seed", currentSeed_},
+               {"goal", result.observation.value("goal", std::string{})},
+               {"step", stepNumber_},
+               {"action", action},
+               {"observation", result.observation},
+               {"reward", result.reward},
+               {"done", result.done},
+               {"time_ms", elapsed},
+               {"popup", popup},
+               {"timed_out", result.timedOut},
+               {"info", result.info}};
+
+  log_ << line.dump() << '\n';
+  log_.flush();
+}
