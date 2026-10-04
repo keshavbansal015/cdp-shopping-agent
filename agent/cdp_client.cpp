@@ -8,6 +8,10 @@
 #include <stdexcept>
 #include <string>
 
+namespace asio = boost::asio;
+namespace beast = boost::beast;
+namespace websocket = boost::beast::websocket;
+
 CDPClient::CDPClient(const std::string &host, const std::string &port,
                      const std::string &path)
     : resolver_(io_), ws_(io_), next_id_(1) {

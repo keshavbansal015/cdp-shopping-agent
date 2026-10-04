@@ -1,6 +1,14 @@
-#include <random>
 #include "utils.h"
+#include <random>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
 
+
+namespace asio = boost::asio;
+namespace beast = boost::beast;
+namespace http = boost::beast::http;
+using tcp = asio::ip::tcp;
 
 std::vector<std::string> generateTest() {
   using namespace std;
@@ -101,4 +109,3 @@ std::string http_get(const std::string &host, const std::string &port,
 
   return response.body();
 }
-

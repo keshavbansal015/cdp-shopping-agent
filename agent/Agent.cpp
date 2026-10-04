@@ -1,7 +1,7 @@
 #include "Agent.h"
 #include "params.h"
 #include "utils.h"
-#include <iostream>
+#include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
