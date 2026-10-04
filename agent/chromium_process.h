@@ -15,12 +15,10 @@ Class to handle the lifecycle of the Chromium process.
 class Chromium{
 public:
   Chromium() = default;
+  ~Chromium();
 
   void start(const std::string &executable, int port);
-
   void stop();
-
-  ~Chromium();
 
   Chromium(const Chromium &) = delete;
   Chromium &operator=(const Chromium &) = delete;

@@ -1,3 +1,13 @@
+#include <iostream>
+#include <chrono>
+#include <csignal>
+#include <stdexcept>
+#include <string>
+#include <sys/wait.h>
+#include <thread>
+#include <unistd.h>
+#include <vector>
+
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
@@ -9,16 +19,6 @@
 #include "utils.h"
 #include "params.h"
 #include <nlohmann/json.hpp>
-
-#include <chrono>
-#include <csignal>
-#include <iostream>
-#include <stdexcept>
-#include <string>
-#include <sys/wait.h>
-#include <thread>
-#include <unistd.h>
-#include <vector>
 
 using json = nlohmann::json;
 
@@ -45,14 +45,13 @@ int main(int argc, char *argv[]) {
     //   https://example.com
 
     std::string chromium_path = argc >= 2 ? argv[1] : "chromium";
-
     std::string url = argc >= 3 ? argv[2] : "https://example.com";
 
     constexpr int port = 9222;
-
     std::cout << "Starting Chromium...\n";
 
-    Chromium chromium(chromium_path, port);
+    Chromium chromium;
+    chromium.start(chromium_path, port);
 
     // --------------------------------------------------------
     // Wait for Chromium's debugging HTTP endpoint.
