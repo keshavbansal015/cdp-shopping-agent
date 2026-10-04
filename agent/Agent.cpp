@@ -34,6 +34,8 @@ json Agent::reset(const std::string &task, int seed) {
   ++episode_;
   stepNumber_ = 0;
   goalMap_.clear();
+  prevCartCount_ = 0;
+  prevTargetQty_ = 0;
 
   currentTask_ = task;
   currentSeed_ = seed;
@@ -69,17 +71,22 @@ json Agent::reset(const std::string &task, int seed) {
   auto getParam = [&url](const std::string &key) -> std::string {
     std::string pattern = key + "=";
     size_t pos = url.find(pattern);
-    if (pos == std::string::npos) return "";
+    if (pos == std::string::npos)
+      return "";
     size_t start = pos + pattern.length();
     size_t end = url.find('&', start);
-    return (end == std::string::npos) ? url.substr(start) : url.substr(start, end - start);
+    return (end == std::string::npos) ? url.substr(start)
+                                      : url.substr(start, end - start);
   };
 
   std::string item = getParam("item");
   std::string qtyStr = getParam("qty");
 
   if (!item.empty() && !qtyStr.empty()) {
-    try { goalMap_[item] = std::stoi(qtyStr); } catch (...) {}
+    try {
+      goalMap_[item] = std::stoi(qtyStr);
+    } catch (...) {
+    }
   }
 
   // navigate to the test url
@@ -117,7 +124,7 @@ StepResult Agent::step(const std::string &action) {
 
   try {
     if (stepNumber_ > MAX_STEPS) {
-      result.reward = 0;
+      result.reward = -10.0;
       result.done = true;
       result.timedOut = true;
 
@@ -169,6 +176,7 @@ StepResult Agent::step(const std::string &action) {
       }
 
       realMouseClick(button.x, button.y, button.width, button.height);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
     } else {
       throw std::runtime_error("action must be click(i) or wait");
     }
@@ -186,34 +194,74 @@ StepResult Agent::step(const std::string &action) {
     result.observation = observe();
 
     // ------------------------------------------------
-    // Reward.
-    //
-    // The only positive terminal reward corresponds
-    // to the page's explicit success state.
-    //
-    // There is no reward for intermediate UI states.
+    // Reward Calculation (Event / Transition based)
     // ------------------------------------------------
-
     bool success = isOrderComplete();
 
     if (success) {
-
-      
-
-      result.reward = 1;
+      result.reward = 20.0; // High reward for complete goal success
       result.done = true;
-
       result.info["reason"] = "correct order placed";
     } else if (stepNumber_ >= MAX_STEPS) {
-      result.reward = 0;
+      result.reward = -10.0;
       result.done = true;
-
       result.timedOut = true;
-
       result.info["reason"] = "maximum step count reached";
     } else {
-      result.reward = 0;
       result.done = false;
+      double stepReward = -0.5; // Small step penalty to encourage efficiency
+
+      // Check current cart state
+      int currentCartCount = 0;
+      int currentTargetQty = 0;
+
+      if (result.observation.contains("cart") &&
+          result.observation["cart"].is_array()) {
+        for (const auto &item : result.observation["cart"]) {
+          std::string itemId = item.value("id", "");
+          int itemQty = item.value("qty", 0);
+          currentCartCount += itemQty;
+
+          auto it = goalMap_.find(itemId);
+          if (it != goalMap_.end()) {
+            currentTargetQty += itemQty;
+          }
+        }
+      }
+
+      // 1. One-time reward for adding TARGET item to cart
+      int targetDelta = currentTargetQty - prevTargetQty_;
+      if (targetDelta > 0) {
+        for (const auto &[targetItem, expectedQty] : goalMap_) {
+          if (currentTargetQty == expectedQty) {
+            stepReward += 3.0; // Exact target quantity reached
+          } else if (currentTargetQty < expectedQty) {
+            stepReward += 1.5; // Making progress towards target quantity
+          } else {
+            stepReward -= 0.8; // Over target quantity
+          }
+        }
+      }
+
+      // 2. Minor reward/penalty for non-target items added
+      int otherDelta = (currentCartCount - currentTargetQty) -
+                       (prevCartCount_ - prevTargetQty_);
+      if (otherDelta > 0) {
+        stepReward +=
+            0.05; // Minor exploratory reward for learning how to add to cart
+      }
+
+      // 3. Checkout screen reached
+      std::string screen = result.observation.value("screen", "");
+      if (screen == "done") {
+        stepReward += 0.08; // Small reward for reaching and completing checkout
+        result.done = true;
+      }
+
+      prevCartCount_ = currentCartCount;
+      prevTargetQty_ = currentTargetQty;
+
+      result.reward = stepReward;
     }
   } catch (const std::exception &e) {
     result.reward = 0;
@@ -275,22 +323,45 @@ json Agent::observe() {
 
   json remote = evaluation["result"]["result"];
 
-  if (!remote.contains("value"))
-    throw std::runtime_error("Could not read page observation");
+  if (evaluation.contains("exceptionDetails")) {
+    throw std::runtime_error(evaluation["exceptionDetails"].dump());
+  }
+  if (!remote.contains("value")) {
+    throw std::runtime_error("observe failed: " + remote.dump());
+  }
 
   json page = remote["value"];
-  result["screen"] = page.value("screen", std::string{});
+  result["screen"] = (page.contains("screen") && page["screen"].is_string())
+                         ? page["screen"].get<std::string>()
+                         : std::string{};
+  result["title"] = (page.contains("title") && page["title"].is_string())
+                        ? page["title"].get<std::string>()
+                        : std::string{};
+  result["productId"] =
+      (page.contains("productId") && page["productId"].is_string())
+          ? page["productId"].get<std::string>()
+          : std::string{};
   result["buttons"] = json::array();
 
+  result["isPopup"] = page.contains("isPopup") &&
+                      page["isPopup"].is_boolean() &&
+                      page["isPopup"].get<bool>();
+  result["orderComplete"] = page.contains("orderComplete") &&
+                            page["orderComplete"].is_boolean() &&
+                            page["orderComplete"].get<bool>();
+  result["qty"] = (page.contains("qty") && page["qty"].is_number())
+                      ? page["qty"].get<int>()
+                      : 0;
+  result["cart"] = (page.contains("cart") && page["cart"].is_array())
+                       ? page["cart"]
+                       : json::array();
   const auto &pageButtons = page["buttons"];
-
   for (size_t i = 0; i < pageButtons.size(); ++i) {
     const auto &b = pageButtons[i];
     result["buttons"].push_back({{"i", i},
                                  {"text", b.value("text", std::string{})},
                                  {"clickable", b.value("clickable", false)}});
   }
-
   return result;
 }
 
@@ -337,6 +408,13 @@ void Agent::realMouseClick(double x, double y, double width, double height) {
 
   cdp_->command("Input.dispatchMouseEvent",
                 {{"type", "mousePressed"},
+                 {"x", cx},
+                 {"y", cy},
+                 {"button", "left"},
+                 {"clickCount", 1}},
+                sessionId_);
+  cdp_->command("Input.dispatchMouseEvent",
+                {{"type", "mouseReleased"},
                  {"x", cx},
                  {"y", cy},
                  {"button", "left"},

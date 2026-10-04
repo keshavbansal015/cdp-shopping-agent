@@ -41,6 +41,8 @@ private:
   int stepNumber_ = 0;
   std::string currentTask_;
   int currentSeed_;
+  int prevCartCount_ = 0;
+  int prevTargetQty_ = 0;
   // Helper methods
   void connectToChromium();
   json observe();
