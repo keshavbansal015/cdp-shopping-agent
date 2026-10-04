@@ -15,7 +15,6 @@ namespace http = boost::beast::http;
 using tcp = asio::ip::tcp;
 
 std::vector<std::string> generateTest() {
-  using namespace std;
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_real_distribution<double> distrib(0.0, 1.0);
@@ -26,8 +25,6 @@ std::vector<std::string> generateTest() {
   const int quantities[] = {1, 2, 3};
 
   const int seed = 42;
-  double popup_p = distrib(gen);
-  double delay_p = distrib(gen);
 
   std::string root_url = "file:///Users/keshavbansal/keshav/dev_test/"
                          "cdp-shopping-agent/site/index.html?seed=" +
