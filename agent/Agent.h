@@ -15,7 +15,7 @@ class Agent {
 public:
   std::unordered_map<std::string, int> goalMap_;
   Agent(const std::string &chromiumPath, const std::string &logPath);
-  json reset(const std::string &task);
+  json reset(const std::string &task, int seed);
   StepResult step(const std::string &action);
   ~Agent();
 
@@ -51,5 +51,4 @@ private:
   bool waitUntilStable(int timeoutMs);
   void writeLog(const std::string &action, const StepResult &result,
                 long long elapsed, bool popup);
-  // static std::string addSeedToUrl(std::string url, int seed);
 };

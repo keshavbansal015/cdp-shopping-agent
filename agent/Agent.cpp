@@ -30,12 +30,13 @@ Tear down the current tab, and start a new episode.
 - Enable Page and Runtime domains.
 - Navigate to the given task URL with the seed.
 */
-json Agent::reset(const std::string &task) {
+json Agent::reset(const std::string &task, int seed) {
   ++episode_;
   stepNumber_ = 0;
   goalMap_.clear();
 
   currentTask_ = task;
+  currentSeed_ = seed;
   if (!sessionId_.empty()) {
     try {
       cdp_->command("Target.closeTarget", {{"targetId", targetId_}});
@@ -76,11 +77,7 @@ json Agent::reset(const std::string &task) {
 
   std::string item = getParam("item");
   std::string qtyStr = getParam("qty");
-  std::string seedStr = getParam("seed");
 
-  if (!seedStr.empty()) {
-    try { currentSeed_ = std::stoi(seedStr); } catch (...) {}
-  }
   if (!item.empty() && !qtyStr.empty()) {
     try { goalMap_[item] = std::stoi(qtyStr); } catch (...) {}
   }
@@ -156,8 +153,6 @@ StepResult Agent::step(const std::string &action) {
         throw std::runtime_error("invalid click action: " + action);
       }
 
-      // IMPORTANT:
-      //
       // We re-read the page immediately before clicking.
       // Thus the index refers to the current observation,
       // not an old cached list.
